@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """uint8 tensor affine transformation demo."""
 
+from dataclasses import dataclass
 import sys
 
 try:
@@ -8,6 +9,15 @@ try:
 except ImportError:
   print("Run: pip install -r requirements.txt", file=sys.stderr)
   sys.exit(1)
+
+
+# Similar to block_q8_1 at
+# https://github.com/ggerganov/llama.cpp/blob/master/ggml/src/ggml-common.h
+@dataclass
+class quantized:
+  scale: torch.Tensor # float16
+  zero_point: torch.Tensor # float16
+  t: torch.Tensor
 
 
 def quantize_to_uint8(t: torch.Tensor):
@@ -23,11 +33,15 @@ def quantize_to_uint8(t: torch.Tensor):
   q = (t - zero_point) / scale
   q = torch.clamp(q, min=0, max=255)
   q = q.type(torch.uint8)
-  return q, scale, zero_point
+
+  return quantized(
+      torch.Tensor(scale).to(torch.float16),
+      torch.Tensor(zero_point).to(torch.float16),
+      q)
 
 
-def dequantize_from_uint8(t: torch.Tensor, scale: float, zero_point: float):
-  return t.to(torch.float32) * scale + zero_point
+def dequantize_from_uint8(q: quantized):
+  return q.t.to(torch.float32) * q.scale + q.zero_point
 
 
 def main():
@@ -36,14 +50,14 @@ def main():
   print(f"- {t}")
   print(f"- storage: {len(t)*4} bytes ({len(t)}*4)\n")
 
-  q, scale, zero_point = quantize_to_uint8(t)
+  q = quantize_to_uint8(t)
   print(f"Quantized tensor:")
-  print(f"- {q}")
-  print(f"- scale:      {scale}")
-  print(f"- zero_point: {zero_point}")
-  print(f"- storage: {len(q)+4+4} bytes ({len(q)}+4+4)\n")
+  print(f"- {q.t}")
+  print(f"- scale:      {q.scale}")
+  print(f"- zero_point: {q.zero_point}")
+  print(f"- storage: {len(q.t)+2+2} bytes ({len(q.t)}+2+2)\n")
 
-  d = dequantize_from_uint8(q, scale, zero_point)
+  d = dequantize_from_uint8(q)
   print(f"Dequantized tensor:")
   print(f"- {d}\n")
 

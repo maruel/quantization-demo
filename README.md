@@ -6,19 +6,19 @@ Python code to demonstrate quantization techniques as described in my blog post
 ```
 $ python3 affine_transformation.py
 Original tensor of 8 random values between 0 and 10:
-- tensor([8.9891, 0.1838, 2.2898, 0.0931, 1.9074, 0.9179, 7.1204, 9.9374])
+- tensor([9.9698, 1.2025, 6.2956, 1.3270, 6.1061, 2.6999, 5.1529, 3.4568])
 - storage: 32 bytes (8*4)
 
 Quantized tensor:
-- tensor([230,   2,  56,   0,  46,  21, 182, 255], dtype=torch.uint8)
-- scale:      0.038604993373155594
-- zero_point: 0.09310603141784668
-- storage: 16 bytes (8+4+4)
+- tensor([255,   0, 148,   3, 142,  43, 114,  65], dtype=torch.uint8)
+- scale:      0.034393310546875
+- zero_point: 1.2021484375
+- storage: 12 bytes (8+2+2)
 
 Dequantized tensor:
-- tensor([8.9723, 0.1703, 2.2550, 0.0931, 1.8689, 0.9038, 7.1192, 9.9374])
+- tensor([9.9724, 1.2021, 6.2924, 1.3053, 6.0860, 2.6811, 5.1230, 3.4377])
 
 Numerical error induced by the quantization:
-- absolute: tensor([0.0168, 0.0135, 0.0348, 0.0000, 0.0385, 0.0141, 0.0012, 0.0000])
-- relative: tensor([0.0019, 0.0735, 0.0152, 0.0000, 0.0202, 0.0154, 0.0002, 0.0000])
+- absolute: tensor([-0.0026,  0.0004,  0.0032,  0.0217,  0.0201,  0.0188,  0.0300,  0.0191])
+- relative: tensor([-0.0003,  0.0003,  0.0005,  0.0164,  0.0033,  0.0070,  0.0058,  0.0055])
 ```
