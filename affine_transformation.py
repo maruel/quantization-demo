@@ -11,16 +11,15 @@ except ImportError:
 
 
 def quantize_to_uint8(t: torch.Tensor):
-  # Obtain range of values in the tensor to map between 0 and 255.
   min_val = t.min()
   max_val = t.max()
 
-  # Determine the "zero-point", or value in the tensor to map to 0.
+  # Determine the scale and the zero point: the value in the tensor to map to 0.
   scale = (max_val - min_val) / 255.
   zero_point = min_val
 
-  # Quantize, clamp to ensure we're in [0, 255] then reduce to uint8 to reduce
-  # storage by 4x.
+  # Bias then scale to change the range to [0, 255] then reduce to uint8 to
+  # reduce storage by 4x.
   q = (t - zero_point) / scale
   q = torch.clamp(q, min=0, max=255)
   q = q.type(torch.uint8)
