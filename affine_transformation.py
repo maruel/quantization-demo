@@ -50,7 +50,8 @@ def main():
 
   err = t - d
   print(f"Numerical error induced by the quantization:")
-  print(f"- {err}")
+  print(f"- absolute: {err}")
+  print(f"- relative: {err/t}")
   return 0
 
 
