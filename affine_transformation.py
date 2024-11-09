@@ -34,13 +34,15 @@ def dequantize_from_uint8(t: torch.Tensor, scale: float, zero_point: float):
 def main():
   t = torch.rand(8)*10.
   print(f"Original tensor of 8 random values between 0 and 10:")
-  print(f"- {t}\n")
+  print(f"- {t}")
+  print(f"- storage: {len(t)*4} bytes ({len(t)}*4)\n")
 
   q, scale, zero_point = quantize_to_uint8(t)
   print(f"Quantized tensor:")
   print(f"- {q}")
   print(f"- scale:      {scale}")
-  print(f"- zero_point: {zero_point}\n")
+  print(f"- zero_point: {zero_point}")
+  print(f"- storage: {len(q)+4+4} bytes ({len(q)}+4+4)\n")
 
   d = dequantize_from_uint8(q, scale, zero_point)
   print(f"Dequantized tensor:")
