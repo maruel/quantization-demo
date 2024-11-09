@@ -17,22 +17,23 @@ except ImportError:
 class quantized:
   scale: torch.Tensor # float16
   zero_point: torch.Tensor # float16
-  t: torch.Tensor
+  t: torch.Tensor # uint8
 
 
-def quantize_to_uint8(t: torch.Tensor):
+def quantize_to_uint(t: torch.Tensor, bits: int):
+  assert 2 <= bits <= 8
   min_val = t.min()
   max_val = t.max()
 
   # Determine the scale and the zero point: the value in the tensor to map to 0.
-  scale = (max_val - min_val) / 255.
+  scale = (max_val - min_val) / ((1<<bits)-1)
   zero_point = min_val
 
-  # Bias then scale to change the range to [0, 255] then reduce to uint8 to
-  # reduce storage by 4x.
+  # Bias then scale to change the range to [0, (1<<bits)-1] then reduce to uint8
+  # to reduce storage by 4x.
   q = (t - zero_point) / scale
-  q = torch.clamp(q, min=0, max=255)
-  q = q.type(torch.uint8)
+  q = torch.clamp(q, min=0, max=(1<<bits)-1)
+  q = q.to(torch.uint8)
 
   return quantized(
       torch.Tensor(scale).to(torch.float16),
@@ -40,7 +41,7 @@ def quantize_to_uint8(t: torch.Tensor):
       q)
 
 
-def dequantize_from_uint8(q: quantized):
+def dequantize_from_uint(q: quantized):
   return q.t.to(torch.float32) * q.scale + q.zero_point
 
 
@@ -50,14 +51,15 @@ def main():
   print(f"- {t}")
   print(f"- storage: {len(t)*4} bytes ({len(t)}*4)\n")
 
-  q = quantize_to_uint8(t)
+  # Try 4 to see if error increases.
+  q = quantize_to_uint(t, 8)
   print(f"Quantized tensor:")
   print(f"- {q.t}")
   print(f"- scale:      {q.scale}")
   print(f"- zero_point: {q.zero_point}")
   print(f"- storage: {len(q.t)+2+2} bytes ({len(q.t)}+2+2)\n")
 
-  d = dequantize_from_uint8(q)
+  d = dequantize_from_uint(q)
   print(f"Dequantized tensor:")
   print(f"- {d}\n")
 
