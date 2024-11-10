@@ -88,8 +88,7 @@ def main():
     print(f"  Dequantized tensor:")
     print(f"  - [{', '.join('{:.4f}'.format(x) for x in d.tolist())}]")
     # https://en.wikipedia.org/wiki/Mean_squared_error
-    mse = t - d
-    mse *= mse
+    mse = (t - d) ** 2
     print(f"  - Mean squared error: {sum(mse)/len(mse):g}")
   return 0
 
