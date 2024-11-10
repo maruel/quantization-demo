@@ -40,7 +40,7 @@ Quantizing as 4 bits:
   - Mean squared error: 0.153035
 ```
 
-We see reasonable [MSE](https://en.wikipedia.org/wiki/Mean_squared_error) with
+➡️ We see reasonable [MSE](https://en.wikipedia.org/wiki/Mean_squared_error) with
 great size reduction; from 1024 (float32) to 260 or 132 bytes.
 
 
@@ -78,7 +78,7 @@ Quantizing as 4 bits:
   - Mean squared error: 0.122715
 ```
 
-We see improved [MSE](https://en.wikipedia.org/wiki/Mean_squared_error)
+➡️ We see improved [MSE](https://en.wikipedia.org/wiki/Mean_squared_error)
 compared to whole tensor encoding. 8 bits improved from 0.000525236 to
 0.0004177 and 4 bits improved from 0.153035 to 0.122715. The cost is a
 corresponding increase (260->288 bytes) and (132->160 bytes) in storage size.
@@ -111,6 +111,6 @@ Dequantized tensor:
 - Mean squared error: 0.144666
 ```
 
-Compared to affine transformation in block, the
+➡️ Compared to affine transformation in block, the
 [MSE](https://en.wikipedia.org/wiki/Mean_squared_error) increases a little
 (0.122715->0.144666) for a reduction in storage (160->144 bytes).
