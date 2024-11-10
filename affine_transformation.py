@@ -52,12 +52,9 @@ def quantize_to_uint(t: torch.Tensor, bits: int) -> quantized:
     q = torch.clamp(q, min=0, max=bitsmax)
     # TODO: For bits < 8, we'd want to patch the bits more efficiently.
     q = q.to(torch.uint8)
-
-    out.blocks.append(
-        block_qx_1(
-            torch.Tensor(scale).to(torch.float16),
-            torch.Tensor(zero_point).to(torch.float16),
-            q))
+    scale = scale.to(torch.float16)
+    zero_point = zero_point.to(torch.float16)
+    out.blocks.append(block_qx_1(scale, zero_point, q))
   return out
 
 
