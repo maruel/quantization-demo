@@ -6,19 +6,26 @@ Python code to demonstrate quantization techniques as described in my blog post
 ```
 $ python3 affine_transformation.py
 Original tensor of 8 random values between 0 and 10:
-- tensor([9.9698, 1.2025, 6.2956, 1.3270, 6.1061, 2.6999, 5.1529, 3.4568])
+- [1.3517, 0.0395, 6.6755, 4.6396, 0.4514, 8.1571, 8.1088, 9.1571]
 - storage: 32 bytes (8*4)
 
-Quantized tensor:
-- tensor([255,   0, 148,   3, 142,  43, 114,  65], dtype=torch.uint8)
-- scale:      0.034393310546875
-- zero_point: 1.2021484375
-- storage: 12 bytes (8+2+2)
+Quantizing as 8 bits:
+  Quantized tensor:
+  - [36, 0, 185, 128, 11, 227, 225, 255]
+  - scale:      0.0357666
+  - zero_point: 0.0394897
+  - storage: 12 bytes (8*8/8+2+2)
+  Dequantized tensor:
+  - [1.3271, 0.0395, 6.6563, 4.6176, 0.4329, 8.1585, 8.0870, 9.1600]
+  - Mean squared error: 0.000285141
 
-Dequantized tensor:
-- tensor([9.9724, 1.2021, 6.2924, 1.3053, 6.0860, 2.6811, 5.1230, 3.4377])
-
-Numerical error induced by the quantization:
-- absolute: tensor([-0.0026,  0.0004,  0.0032,  0.0217,  0.0201,  0.0188,  0.0300,  0.0191])
-- relative: tensor([-0.0003,  0.0003,  0.0005,  0.0164,  0.0033,  0.0070,  0.0058,  0.0055])
+Quantizing as 4 bits:
+  Quantized tensor:
+  - [2, 0, 10, 7, 0, 13, 13, 14]
+  - scale:      0.60791
+  - zero_point: 0.0394897
+  - storage: 8 bytes (8*4/8+2+2)
+  Dequantized tensor:
+  - [1.2553, 0.0395, 6.1186, 4.2949, 0.0395, 7.9423, 7.9423, 8.5502]
+  - Mean squared error: 0.131248
 ```
