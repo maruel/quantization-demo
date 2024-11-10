@@ -67,9 +67,9 @@ def dequantize_from_uint(q: quantized) -> torch.Tensor:
 
 
 def main():
-  t = torch.rand(8)*10.
-  print(f"Original tensor of 8 random values between 0 and 10:")
-  print(f"- [{', '.join('{:.4f}'.format(x) for x in t.tolist())}]")
+  t = torch.rand(256)*10. - 5
+  print(f"Original tensor of 256 random values between -5 and 5:")
+  print(f"- [{', '.join('{:.4f}'.format(x) for x in t[:8].tolist())}, ...]")
   print(f"- storage: {len(t)*4} bytes ({len(t)}*4)")
 
   for bits in [8, 4]:
@@ -79,12 +79,12 @@ def main():
     b0 = q.blocks[0]
     print(f"  - scale:      {b0.scale:g}")
     print(f"  - zero_point: {b0.zero_point:g}")
-    print(f"  - values:     [{', '.join(str(x) for x in b0.t.tolist())}]")
-    print(f"  - storage:    {int(len(b0.t)*bits/8+2+2)} bytes ({len(b0.t)}*{bits}/8+2+2)")
+    print(f"  - values:     [{', '.join(str(x) for x in b0.t[:8].tolist())}, ...]")
+    print(f"  - storage:    {len(q.blocks)*int(2+2+len(b0.t)*bits/8)} bytes ({len(q.blocks)}*(2+2+{len(b0.t)}*{bits}/8))")
 
     d = dequantize_from_uint(q)
     print(f"  Dequantized tensor:")
-    print(f"  - [{', '.join('{:.4f}'.format(x) for x in d.tolist())}]")
+    print(f"  - [{', '.join('{:.4f}'.format(x) for x in d[:8].tolist())}, ...]")
     # https://en.wikipedia.org/wiki/Mean_squared_error
     mse = (t - d) ** 2
     print(f"  - Mean squared error: {sum(mse)/len(mse):g}")
