@@ -38,7 +38,7 @@ class quantized:
 def make_qp_quants(nmax: int, x: torch.Tensor, quant_weights: torch.Tensor):
   """Calculates quantized values of tensor x.
 
-  Tries to reduce the Mean Squared Error (MSE) by fudging the values a bit.
+  It tries to reduce the Mean Squared Error (MSE) by fudging the values a bit.
   https://en.wikipedia.org/wiki/Mean_squared_error
 
   :param nmax: highest value as a unsigned bit that is representable.
@@ -62,6 +62,8 @@ def make_qp_quants(nmax: int, x: torch.Tensor, quant_weights: torch.Tensor):
   # Search for the best Mean squared error. Offset values between [-0.4, 0.4] to
   # find the best MSE..
   diff = x - ((1./iscale) * L)
+  # This is not strictly speaking the MSE, this is a weighted MSE based on the
+  # importance of each weight.
   best_mse = (quant_weights*(diff**2)).sum()
   for iis in range(-4, 5):
     if not iis:
@@ -105,8 +107,8 @@ def make_qp_quants(nmax: int, x: torch.Tensor, quant_weights: torch.Tensor):
 def make_qkx3_quants(nmax: torch.Tensor, x: torch.Tensor, weights: torch.Tensor):
   """Quantize tensor x into values [0, nmax] according to importance weights.
 
-  It tries to reduce Median Absolute Deviation, trying nstep (36) times.
-  https://en.wikipedia.org/wiki/Median_absolute_deviation
+  It tries to reduce the "MAD" by fudging the values a bit. It is similar to MSE
+  (Mean Squared Error) except that each error is weighted by `weights`.
 
   :param nmax: highest value as a unsigned bit that is representable.
   :param x: tensor to quantize, where each values are to be quantized between [0, nmax].
@@ -133,7 +135,6 @@ def make_qkx3_quants(nmax: torch.Tensor, x: torch.Tensor, weights: torch.Tensor)
     # All negative values.
     return 0., -fmin
 
-  # Try to find the best Median Absolute Deviation (MAD).
   sum_w = weights.sum()
   sum_x = (weights*(x**2)).sum()
   iscale = nmax/(fmax - fmin)
@@ -141,8 +142,12 @@ def make_qkx3_quants(nmax: torch.Tensor, x: torch.Tensor, weights: torch.Tensor)
   l = (iscale * (x-fmin)).to(torch.uint8)
   # Calculate the quantized values without offset.
   L = torch.maximum(torch.minimum(l, nmax), torch.zeros(1).to(torch.uint8))
-  diff = (scale*L + fmin - x)**2
-  best_mad = (weights*diff).sum()
+  # This is the Mean Squared Error. Each value is reconstructed from the
+  # quantized value and then subtracted from the original value.
+  mse = ((scale*L + fmin) - x)**2
+  # This is the "MAD" which is the MSE but with each error multiplied by the
+  # relative importance for each weight.
+  best_mad = (weights*mse).sum()
   for iis in range(nstep):
     # Try a offset starting at rmin and iterating nstep times, increasing the
     # value by rdelta. Compare with iscale above.
@@ -163,9 +168,10 @@ def make_qkx3_quants(nmax: torch.Tensor, x: torch.Tensor, weights: torch.Tensor)
         # Realign at zero.
         this_min = torch.zeros(1)
         this_scale = sum_xl / sum_l2
+      # Recalculate MSE.
+      mse = ((this_scale*Laux + this_min) - x)**2
       # Recalculate MAD.
-      diff = (this_scale * Laux + this_min - x)**2
-      mad = (weights*diff).sum()
+      mad = (weights*mse).sum()
       if mad.item() < best_mad.item():
         # Bingo.
         best_mad = mad
