@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """uint8 tensor k-quantization demo.
 
+This code is based on the work of https://github.com/ikawrakow.
+
 This code is not optimized.
 """
 
@@ -276,7 +278,9 @@ def dequantize_from_Qx_K(quant: quantized) -> torch.Tensor:
 def main():
   # We need to have negative values otherwise zero_offset and suboffsets are
   # always 0 and it's not really useful from a demonstration perspective.
-  t = torch.rand(256)*10. - 5
+  g = torch.Generator(device="cpu")
+  g.manual_seed(1)
+  t = torch.rand(256, generator=g)*10. - 5
   print(f"Original tensor of 256 random values between -5 and 5:")
   print(f"- [{', '.join('{:.4f}'.format(x) for x in t[:8].tolist())}, ...]")
   print(f"- storage: {len(t)*4} bytes ({len(t)}*4)\n")
