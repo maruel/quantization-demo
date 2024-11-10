@@ -262,13 +262,13 @@ def dequantize_from_Qx_K(quant: quantized) -> torch.Tensor:
   for sb in quant.blocks:
     subblock_size = len(sb.packed) // len(sb.subscales)
     for j in range(len(sb.subscales)):
-      q = sb.packed[j*subblock_size:(j+1)*subblock_size]
-      d = sb.scale * sb.subscales[j]
-      m = sb.zero_point * sb.suboffsets[j]
+      packed = sb.packed[j*subblock_size:(j+1)*subblock_size]
+      scale = sb.scale * sb.subscales[j]
+      zero_point = sb.zero_point * sb.suboffsets[j]
       # In contrast with the affine transformation, the minimum value is
       # subtracted. As I (Marc-Antoine Ruel) understand, this is because the
       # value is stored as a uint.
-      out.append(q * d - m)
+      out.append(packed * scale - zero_point)
   if not out:
     return torch.zeros(0)
   # TODO: This could be made faster by reducing memory allocations.
