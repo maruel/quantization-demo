@@ -77,10 +77,10 @@ def main():
     q = quantize_to_uint(t, bits)
     print(f"  Quantized tensor:")
     b0 = q.blocks[0]
-    print(f"  - [{', '.join(str(x) for x in b0.t.tolist())}]")
     print(f"  - scale:      {b0.scale:g}")
     print(f"  - zero_point: {b0.zero_point:g}")
-    print(f"  - storage: {int(len(b0.t)*bits/8+2+2)} bytes ({len(b0.t)}*{bits}/8+2+2)")
+    print(f"  - values:     [{', '.join(str(x) for x in b0.t.tolist())}]")
+    print(f"  - storage:    {int(len(b0.t)*bits/8+2+2)} bytes ({len(b0.t)}*{bits}/8+2+2)")
 
     d = dequantize_from_uint(q)
     print(f"  Dequantized tensor:")
