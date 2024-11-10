@@ -49,7 +49,7 @@ def quantize_to_uint(t: torch.Tensor, bits: int) -> quantized:
     # Bias then scale to change the range to [0, bitsmax] then reduce to uint8
     # to reduce storage by 4x.
     q = (batch - zero_point) / scale
-    q = torch.clamp(q, min=0, max=bitsmax)
+    q = q.clamp(0, bitsmax)
     # TODO: For bits < 8, we'd want to patch the bits more efficiently.
     q = q.to(torch.uint8)
     scale = scale.to(torch.float16)
