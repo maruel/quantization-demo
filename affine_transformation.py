@@ -62,6 +62,8 @@ def quantize_to_uint(t: torch.Tensor, bits: int) -> quantized:
 
 
 def dequantize_from_uint(q: quantized) -> torch.Tensor:
+  if not q.blocks:
+    return torch.empty(0)
   return torch.cat(
       tuple(b.t.to(torch.float32) * b.scale + b.zero_point
             for b in q.blocks))
