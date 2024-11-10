@@ -13,6 +13,8 @@ By saving one `a` (scale) and `b` (zero point/bias) per block, we can reduce the
 
 Source: [affine_transformation.py](affine_transformation.py)
 
+<details><summary>affine_transformation.py output</summary>
+
 ```
 $ python3 affine_transformation.py
 Original tensor of 256 random values between -5 and 5:
@@ -40,6 +42,8 @@ Quantizing as 4 bits:
   - Mean squared error: 0.153035
 ```
 
+</details>
+
 ➡️ We see reasonable [MSE](https://en.wikipedia.org/wiki/Mean_squared_error) with
 great size reduction; from 1024 (float32) to 260 or 132 bytes.
 
@@ -49,7 +53,9 @@ great size reduction; from 1024 (float32) to 260 or 132 bytes.
 This is an affine transformation where the tensor is sliced up in blocks. This
 improves precision a little bit at the cost of a few more bytes.
 
-Source: [affine_transformation.py](affine_transformation.py)
+Source: [affine_transformation_block.py](affine_transformation_block.py)
+
+<details><summary>affine_transformation_block.py output</summary>
 
 ```
 $ python3 affine_transformation_block.py
@@ -78,6 +84,8 @@ Quantizing as 4 bits:
   - Mean squared error: 0.122715
 ```
 
+</details>
+
 ➡️ We see improved [MSE](https://en.wikipedia.org/wiki/Mean_squared_error)
 compared to whole tensor encoding. 8 bits improved from 0.000525236 to
 0.0004177 and 4 bits improved from 0.153035 to 0.122715. The cost is a
@@ -91,6 +99,8 @@ This encodes the numbers with two sets of scales and offsets. One global and one
 transformation, but the subblock `a` (scale) and `b` (zero point) are saved with only 6 bits of precision.
 
 Source: [k_quantization.py](k_quantization.py)
+
+<details><summary>k_quantization.py output</summary>
 
 ```
 $ python3 k_quantization.py
@@ -110,6 +120,8 @@ Dequantized tensor:
 - [2.2812, -2.8262, -1.5488, 2.2812, -4.7422, 2.9219, -1.5488, 2.2812, ...]
 - Mean squared error: 0.144666
 ```
+
+</details>
 
 ➡️ Compared to affine transformation in block, the
 [MSE](https://en.wikipedia.org/wiki/Mean_squared_error) increases a little
