@@ -38,9 +38,13 @@ class quantized:
 def make_qp_quants(nmax: int, x: torch.Tensor, quant_weights: torch.Tensor):
   """Calculates quantized values of tensor x.
 
+  Tries to reduce the Mean Squared Error (MSE) by fudging the values a bit.
+  https://en.wikipedia.org/wiki/Mean_squared_error
+
   :param nmax: highest value as a unsigned bit that is representable.
   :param x: tensor to quantize, where each values returned are within [0, nmax].
-  :param quant_weights: Unsure.
+  :param quant_weights: Relative importance of each weight. The higher the
+  value, the more important the precision of the corresponding weight is.
 
   :return: scale and quantized values.
 
@@ -99,7 +103,17 @@ def make_qp_quants(nmax: int, x: torch.Tensor, quant_weights: torch.Tensor):
 
 
 def make_qkx3_quants(nmax: torch.Tensor, x: torch.Tensor, weights: torch.Tensor):
-  """Simplified version from make_qkx3_quant() in
+  """Quantize tensor x into values [0, nmax] according to importance weights.
+
+  It tries to reduce Median Absolute Deviation, trying nstep (36) times.
+  https://en.wikipedia.org/wiki/Median_absolute_deviation
+
+  :param nmax: highest value as a unsigned bit that is representable.
+  :param x: tensor to quantize, where each values are to be quantized between [0, nmax].
+  :param weights: Relative importance of each weight. The higher the value, the
+  more important the precision of the corresponding weight is.
+
+  Simplified version from make_qkx3_quant() in
   https://github.com/ggerganov/llama.cpp/blob/master/ggml/src/ggml-quants.c
 
   In the original code, use_mad is always false and weights is always specified.
@@ -112,75 +126,95 @@ def make_qkx3_quants(nmax: torch.Tensor, x: torch.Tensor, weights: torch.Tensor)
   rdelta = 0.05
   nstep = 36
 
-  #print(f"make_qkx3_quants()")
   n = len(x)
   fmin = torch.minimum(x.min(), torch.zeros(1))
   fmax = x.max()
   if fmax <= fmin:
     # All negative values.
     return 0., -fmin
+
+  # Try to find the best Median Absolute Deviation (MAD).
   sum_w = weights.sum()
   sum_x = (weights*(x**2)).sum()
   iscale = nmax/(fmax - fmin)
   scale = 1./iscale
-  l = (iscale*(x - fmin)).to(torch.uint8)
+  l = (iscale * (x-fmin)).to(torch.uint8)
+  # Calculate the quantized values without offset.
   L = torch.maximum(torch.minimum(l, nmax), torch.zeros(1).to(torch.uint8))
-  diff = scale * L + fmin - x
-  diff = diff**2
-  best_mad = (weights * diff).sum()
-  Laux = torch.zeros(32).to(torch.uint8)
+  diff = (scale*L + fmin - x)**2
+  best_mad = (weights*diff).sum()
   for iis in range(nstep):
+    # Try a offset starting at rmin and iterating nstep times, increasing the
+    # value by rdelta. Compare with iscale above.
     iscale = (rmin + rdelta*iis + nmax)/(fmax - fmin)
-    l = (iscale*(x-fmin)).to(torch.uint8)
+    l = (iscale * (x-fmin)).to(torch.uint8)
+    # Calculate the quantized values with the offset.
     Laux = torch.maximum(torch.minimum(l, nmax), torch.zeros(1).to(torch.uint8))
     sum_l = (weights*l).sum()
-    sum_l2 = (weights*(l**2)).sum()
+    sum_l2 = (weights * (l**2)).sum()
     sum_xl = (weights*l*x).sum()
-    D = sum_w * sum_l2 - sum_l * sum_l
+    # Please send a PR updating this comment to explain what D is.
+    D = sum_w*sum_l2 - sum_l*sum_l
     if D.item() > 0:
-      this_scale = (sum_w * sum_xl - sum_x * sum_l)/D
-      this_min   = (sum_l2 * sum_x - sum_l * sum_xl)/D
+      # This is a probable candidate!
+      this_scale = (sum_w*sum_xl - sum_x*sum_l)/D
+      this_min   = (sum_l2*sum_x - sum_l*sum_xl)/D
       if this_min.item() > 0:
+        # Realign at zero.
         this_min = torch.zeros(1)
         this_scale = sum_xl / sum_l2
-      diff = this_scale * Laux + this_min - x
-      diff = diff**2
+      # Recalculate MAD.
+      diff = (this_scale * Laux + this_min - x)**2
       mad = (weights*diff).sum()
       if mad.item() < best_mad.item():
-        L = Laux
+        # Bingo.
         best_mad = mad
         scale = this_scale
         fmin = this_min
-        print(f"  fmin = {fmin}")
-  #print(f"make_qkx3_quants({nmax}, {x}, {weights}) -> {scale}, {-fmin}, {L}")
-  #print(f"make_qkx3_quants() -> {scale}, {-fmin}")
   return scale, -fmin
 
 
 def quantize_to_Q4_K_block(x: torch.Tensor, quant_weights = None) -> superblock:
+  """Quantize (compress) a block using K-Quantization algorithm.
+
+  :param t: tensor to quantize.
+  :param quant_weights: optional imatrix to improve the quantization. It must be
+  the same length as x. Not tested.
+
+  Similar implementation to quantize_row_q4_K_impl() at
+  https://github.com/ggerganov/llama.cpp/blob/master/ggml/src/ggml-quants.c
+  """
   bits = 4
-  # Batch size, aka QK_K
+  # Batch size, aka QK_K, hardcoded to 256.
   bs = len(x)
   bitsmax = torch.tensor((1<<bits)-1).to(torch.uint8)
-  sw = torch.zeros(bs//32)
-  mins = torch.zeros(bs//32)
-  scales = torch.zeros(bs//32)
+  # Assign a weight important either based on quant_weights if provided or based
+  # on the absolute value.
+  weight_importance = torch.zeros(bs//32)
 
-  #print(f"  quantize block {i}: {x}")
-  sum_x2 = (x * x).sum()
+  # Values that will be used to calculate the scale and zero point.
+  scales = torch.zeros(bs//32)
+  mins = torch.zeros(bs//32)
+
+  # Properties of the number distribution.
+  sum_x2 = (x**2).sum()
+  # This was changed to 2 in https://github.com/ggerganov/llama.cpp/pull/5361
+  # but unclear as to why.
   sigma2 = 2.*sum_x2/bs
   av_x = sigma2.sqrt()
-  # For each subblock:
+  # For each subblock, calculate the weight importance, scale and min.
   for j in range(bs//32):
     subx = x[32*j:32*(j+1)]
     if quant_weights:
-      weights = quant_weights[bs*i+32*j:bs*i+32*(j+1)] * (sigma2 + (subx**2)).sqrt()
+      weights = quant_weights[32*j:32*(j+1)] * (sigma2 + (subx**2)).sqrt()
     else:
       weights = av_x + subx.abs()
-    sw[j] = weights.sum().item()
+    # The more the values are large, the larger the importance.
+    weight_importance[j] = weights.sum().item()
     scales[j], mins[j] = make_qkx3_quants(bitsmax, subx, weights)
-  scale, subscales = make_qp_quants(bitsmax, scales, sw)
-  zero_point, suboffsets = make_qp_quants(bitsmax, mins, sw)
+  # Requantize to get the final scaling and offset values.
+  scale, subscales = make_qp_quants(bitsmax, scales, weight_importance)
+  zero_point, suboffsets = make_qp_quants(bitsmax, mins, weight_importance)
   values = []
   for j in range(bs//32):
     d = scale * subscales[j]
@@ -200,21 +234,20 @@ def quantize_to_Q4_K_block(x: torch.Tensor, quant_weights = None) -> superblock:
       values=torch.cat(values))
 
 
-def quantize_to_Q4_K(t: torch.Tensor, quant_weights = None) -> quantized:
-  """Similar implementation to quantize_row_q4_K_impl() at
-  https://github.com/ggerganov/llama.cpp/blob/master/ggml/src/ggml-quants.c
-
-  quant_weights is the optional imatrix to improve the quantization. It must be
-  the same length as t.
-  """
+def quantize_to_Q4_K(t: torch.Tensor) -> quantized:
+  """Quantize (compress) a tensor using K-Quantization algorithm."""
   # Batch size, aka QK_K
   bs = 256
   nb = (len(t)+bs-1)//bs
-  return quantized([quantize_to_Q4_K_block(t[bs*i:bs*(i+1)], quant_weights) for i in range(nb)])
+  # If quant_weights were to be provided, it should be the same length as t and
+  # a view passed to the function, i.e. quant_weights[bs*i:bs*(i+1)]
+  return quantized([quantize_to_Q4_K_block(t[bs*i:bs*(i+1)], None) for i in range(nb)])
 
 
 def dequantize_from_Qx_K(quant: quantized) -> torch.Tensor:
-  """Simplified implementation of dequantize_row_q4_K() at
+  """Dequantize (decompress) the quantized tensor.
+
+  Simplified implementation of dequantize_row_q4_K() at
   https://github.com/ggerganov/llama.cpp/blob/master/ggml/src/ggml-quants.c
   """
   out = []
@@ -225,11 +258,12 @@ def dequantize_from_Qx_K(quant: quantized) -> torch.Tensor:
       d = sb.scale * sb.subscales[j]
       m = sb.zero_point * sb.suboffsets[j]
       # In contrast with the affine transformation, the minimum value is
-      # subtracted. As I (Marc-Antoine Rul) understand, this is because the
+      # subtracted. As I (Marc-Antoine Ruel) understand, this is because the
       # value is stored as a uint.
       out.append(q * d - m)
   if not out:
     return torch.zeros(0)
+  # TODO: This could be made faster by reducing memory allocations.
   return torch.cat(out)
 
 
