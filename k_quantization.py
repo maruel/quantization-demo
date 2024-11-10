@@ -35,43 +35,50 @@ class quantized:
   blocks: list[superblock]
 
 
-def nearest_int(f):
-  return int(round(f))
-
-
 def make_qp_quants(nmax: int, x: torch.Tensor, quant_weights: torch.Tensor):
-  #print(f"make_qp_quants({nmax}, {x}, {quant_weights}")
+  """Calculates quantized values of tensor x.
+
+  :param nmax: highest value as a unsigned bit that is representable.
+  :param x: tensor to quantize, where each values returned are within [0, nmax].
+  :param quant_weights: Unsure.
+
+  :return: scale and quantized values.
+
+  Simplified version of make_qp_quants() at
+  https://github.com/ggerganov/llama.cpp/blob/master/ggml/src/ggml-quants.c
+  """
   n = len(x)
-  # float make_qp_quants(int n, int nmax, const float * x, uint8_t * L, const float * quant_weights):
   fmax = x.max()
   if not fmax.item():
     # All zeros.
     return torch.zeros(1), torch.zeros(len(x)).to(torch.uint8)
   iscale = nmax / fmax
+  # Start with a naive quantization.
   L = (iscale * x).to(torch.uint8)
-  # Search for the best Mean squared error. First calculate for iis 0.
-  scale = 1./iscale
-  diff = x - (scale*L)
+  # Search for the best Mean squared error. Offset values between [-0.4, 0.4] to
+  # find the best MSE..
+  diff = x - ((1./iscale) * L)
   best_mse = (quant_weights*(diff**2)).sum()
   for iis in range(-4, 5):
     if not iis:
       continue
     iscale_is = (0.1*iis + nmax)/fmax
-    scale_is = 1./iscale_is
-    # Do not update L here.
     l = torch.minimum((iscale_is*x).to(torch.uint8).min(), nmax)
-    diff = x - (scale_is*l)
+    diff = x - ((1./iscale_is) * l)
     mse = (quant_weights*(diff**2)).sum()
     if mse.item() < best_mse.item():
+      # Shifting values improved MSE, use this.
       best_mse = mse
       iscale = iscale_is
 
-  L = torch.minimum((iscale_is*x).to(torch.uint8), nmax)
+  # Recalculate the quantized values with the best bias.
+  # TODO: Keep all the `l` to save unnecessary calculation.
+  L = torch.minimum((iscale*x).to(torch.uint8), nmax)
   sumlx = (quant_weights*x*L).sum()
   suml2 = (quant_weights*(L**2)).sum()
   for itry in range(5):
-    #print("  itry", itry)
-    n_changed = 0
+    # I have no idea what this does.
+    changed = False
     slx = sumlx - quant_weights*x*L
     sl2 = suml2 - quant_weights*(L**2)
     new_l = torch.minimum((x * sl2 / slx).to(torch.uint8), nmax)
@@ -84,10 +91,9 @@ def make_qp_quants(nmax: int, x: torch.Tensor, quant_weights: torch.Tensor):
             L[i] = new_l[i]
             sumlx = slx[i]
             suml2 = sl2[i]
-            ++n_changed
-    if not n_changed:
+            changed = True
+    if not changed:
       break
-  #print(f"make_qp_quants() -> {sumlx/suml2}, {L}")
   return sumlx/suml2, L
 
 
