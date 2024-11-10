@@ -28,7 +28,7 @@ class superblock:
   zero_point: float = None # torch.Tensor # float16
   subscales: torch.Tensor = None  # 8x 6-bits encoded values encoded as uint8
   suboffsets: torch.Tensor = None  # 8x 6-bits encoded values encoded as uint8
-  values: torch.Tensor = torch.zeros(256, dtype=torch.uint8) # 256x values stored as uint8
+  packed: torch.Tensor = torch.zeros(256, dtype=torch.uint8) # 256x values stored as uint8
 
 
 @dataclass
@@ -223,23 +223,23 @@ def quantize_to_Q4_K_block(x: torch.Tensor, quant_weights = None) -> superblock:
   # Requantize to get the final scaling and offset values.
   scale, subscales = make_qp_quants(bitsmax, scales, weight_importance)
   zero_point, suboffsets = make_qp_quants(bitsmax, mins, weight_importance)
-  values = []
+  packed = []
   for j in range(bs//32):
     d = scale * subscales[j]
     if not d.item():
-      values.append(torch.zeros(32).to(torch.uint8))
+      packed.append(torch.zeros(32).to(torch.uint8))
     else:
       dm = zero_point * suboffsets[j]
       # Note: Add the zero point instead of subtracting.
       # While it is stored as one value per uint8 here for simplicity, in
       # production there should be two values packed per uint8.
-      values.append(((x[32*j:32*(j+1)] + dm)/d).to(torch.uint8).clamp(0, bitsmax))
+      packed.append(((x[32*j:32*(j+1)] + dm)/d).to(torch.uint8).clamp(0, bitsmax))
   return superblock(
       scale=scale.to(torch.float16),
       zero_point=zero_point.to(torch.float16),
       subscales=subscales,
       suboffsets=suboffsets,
-      values=torch.cat(values))
+      packed=torch.cat(packed))
 
 
 def quantize_to_Q4_K(t: torch.Tensor) -> quantized:
@@ -260,9 +260,9 @@ def dequantize_from_Qx_K(quant: quantized) -> torch.Tensor:
   """
   out = []
   for sb in quant.blocks:
-    subblock_size = len(sb.values) // len(sb.subscales)
+    subblock_size = len(sb.packed) // len(sb.subscales)
     for j in range(len(sb.subscales)):
-      q = sb.values[j*subblock_size:(j+1)*subblock_size]
+      q = sb.packed[j*subblock_size:(j+1)*subblock_size]
       d = sb.scale * sb.subscales[j]
       m = sb.zero_point * sb.suboffsets[j]
       # In contrast with the affine transformation, the minimum value is
@@ -292,12 +292,12 @@ def main():
   print(f"- zero_point: {b0.zero_point.item():g}")
   print(f"- subscales:  [{', '.join(f'{x}' for x in b0.subscales.tolist())}]")
   print(f"- suboffsets: [{', '.join(f'{x}' for x in b0.suboffsets.tolist())}]")
-  print(f"- values:     [{', '.join(f'{x}' for x in b0.values[:16].tolist())}, ...]")
+  print(f"- packed:     [{', '.join(f'{x}' for x in b0.packed[:16].tolist())}, ...]")
   # TODO:
-  # - subscales and sufoffsets should be packed as 12 bytes (instead of 16)
+  # - subscales and suboffsets should be packed as 12 bytes (instead of 16)
   # - values should be packed two values per uint8
-  v = len(q.blocks)*int(2 + 2 + len(b0.subscales)*6/8 + len(b0.suboffsets)*6/8 + len(b0.values)*4/8)
-  print(f"- storage:    {v} bytes ({len(q.blocks)}*(2+2+{int(len(b0.subscales)*6/8)}+{int(len(b0.suboffsets)*6/8)}+{int(len(b0.values)*4/8)}))\n")
+  v = len(q.blocks)*int(2 + 2 + len(b0.subscales)*6/8 + len(b0.suboffsets)*6/8 + len(b0.packed)*4/8)
+  print(f"- storage:    {v} bytes ({len(q.blocks)}*(2+2+{int(len(b0.subscales)*6/8)}+{int(len(b0.suboffsets)*6/8)}+{int(len(b0.packed)*4/8)}))\n")
 
   d = dequantize_from_Qx_K(q)
   print(f"Dequantized tensor:")

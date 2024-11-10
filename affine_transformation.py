@@ -35,10 +35,10 @@ def quantize_to_uint(t: torch.Tensor, bits: int) -> quantized:
   # Bias then scale to change the range to [0, bitsmax] then reduce to uint8
   # to reduce storage by 4x.
   # TODO: For bits < 8, we'd want to patch the bits more efficiently.
-  q = ((t - zero_point) / scale).clamp(0, bitsmax).to(torch.uint8)
+  packed = ((t - zero_point) / scale).clamp(0, bitsmax).to(torch.uint8)
   scale = scale.to(torch.float16)
   zero_point = zero_point.to(torch.float16)
-  return quantized(scale, zero_point, q)
+  return quantized(scale, zero_point, packed)
 
 
 def dequantize_from_uint(q: quantized) -> torch.Tensor:
@@ -60,7 +60,7 @@ def main():
     print(f"  Quantized tensor:")
     print(f"  - scale:      {q.scale:g}")
     print(f"  - zero_point: {q.zero_point:g}")
-    print(f"  - values:     [{', '.join(str(x) for x in q.packed[:8].tolist())}, ...]")
+    print(f"  - packed:     [{', '.join(str(x) for x in q.packed[:8].tolist())}, ...]")
     print(f"  - storage:    {int(2+2+len(q.packed)*bits/8)} bytes ((2+2+{len(q.packed)}*{bits}/8))")
 
     d = dequantize_from_uint(q)
