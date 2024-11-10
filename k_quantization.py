@@ -252,8 +252,8 @@ def main():
   # TODO:
   # - subscales and sufoffsets should be packed as 12 bytes (instead of 16)
   # - values should be packed two values per uint8
-  v = int(2 + 2 + len(b0.subscales)*6/8 + len(b0.suboffsets)*6/8 + len(b0.values)*4/8)
-  print(f"- storage:    {v} bytes (2+2+{int(len(b0.subscales)*6/8)}+{int(len(b0.suboffsets)*6/8)}+{int(len(b0.values)*4/8)})\n")
+  v = len(q.blocks)*int(2 + 2 + len(b0.subscales)*6/8 + len(b0.suboffsets)*6/8 + len(b0.values)*4/8)
+  print(f"- storage:    {v} bytes ({len(q.blocks)}*(2+2+{int(len(b0.subscales)*6/8)}+{int(len(b0.suboffsets)*6/8)}+{int(len(b0.values)*4/8)}))\n")
 
   d = dequantize_from_Qx_K(q)
   print(f"Dequantized tensor:")

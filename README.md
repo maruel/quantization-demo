@@ -54,20 +54,20 @@ Source: [k_quantization.py](k_quantization.py)
 
 ```
 Original tensor of 256 random values between -5 and 5:
-- [4.4640, 2.3434, 1.0826, -2.5315, 4.4279, 4.3040, -2.1526, -2.6482, ...]
+- [-2.8963, 4.0689, 1.4847, -4.7193, -0.4170, -4.1676, -0.8481, -2.8160, ...]
 - storage: 1024 bytes (256*4)
 
 Quantized tensor:
-- scale:      0.0450439
-- zero_point: 0.326416
-- subscales:  [13, 14, 14, 14, 14, 15, 14, 14]
-- suboffsets: [14, 14, 14, 15, 13, 15, 14, 15]
-- values:     [15, 11, 9, 3, 15, 15, 4, 3, 14, 2, 12, 3, 2, 8, 9, 0, ...]
-- storage:    144 bytes (2+2+6+6+128)
+- scale:      0.0465698
+- zero_point: 0.3396
+- subscales:  [13, 14, 14, 13, 12, 13, 14, 12]
+- suboffsets: [14, 14, 14, 13, 13, 15, 14, 12]
+- values:     [3, 14, 10, 0, 7, 0, 6, 3, 5, 14, 8, 7, 0, 14, 5, 5, ...]
+- storage:    144 bytes (1*(2+2+6+6+128))
 
 Dequantized tensor:
-- [4.2109, 1.8711, 0.6992, -2.8145, 4.2109, 4.2109, -2.2285, -2.8145, ...]
-- Mean squared error: 0.0754133
+- [-2.9375, 3.7227, 1.3008, -4.7539, -0.5156, -4.7539, -1.1211, -2.9375, ...]
+- Mean squared error: 0.0749112
 ```
 
 We see reasonable [MSE](https://en.wikipedia.org/wiki/Mean_squared_error) with
